@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	entries, err := readData("../../files/mix2")
+	entries, err := readData("../../files/mix")
 	if err != nil {
 		logrus.WithError(err).Fatal("cannot read input data")
 	}
@@ -27,7 +27,7 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	batches := batchEntries(entries, 10000)
+	batches := batchEntries(entries, 1000)
 
 	wg.Add(len(batches))
 	for _, batch := range batches {

@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	mix, err := readData("../../files/hidenseek")
+	mix, err := readData("../../files/bo")
 	if err != nil {
 		logrus.WithError(err).Fatal("cannot read mix data")
 	}
