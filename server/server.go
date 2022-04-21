@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -53,10 +54,7 @@ func (s *Server) Close() error {
 func (s *Server) router() chi.Router {
 	r := chi.NewRouter()
 
-	r.Handle("/metrics", promhttp.HandlerFor(
-		prometheus.DefaultGatherer,
-		promhttp.HandlerOpts{},
-	))
+	r.Handle("/metrics", promhttp.Handler())
 
 	return r
 }
@@ -148,7 +146,10 @@ func connect(ctx context.Context, src, dst net.Conn) {
 	for ctx.Err() == nil {
 		n, err := src.Read(buff)
 		if err != nil {
-			logrus.WithError(err).Error("reading incoming data")
+			if !errors.Is(err, io.EOF) {
+				logrus.WithError(err).Error("reading incoming data")
+			}
+
 			return
 		}
 		b := buff[:n]
