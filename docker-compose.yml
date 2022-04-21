@@ -1,10 +1,25 @@
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+
 services:
-  mqtt:
-    image: "eclipse-mosquitto:latest"
-    network_mode: host
-    ports:
-      - 1883:1883
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
     volumes:
-      - ./mosquitto:/mosquitto/conf
-      - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
+      - ./prometheus:/etc/prometheus/
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    network_mode: host
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+    env_file:
+      - ./grafana/config.monitoring
+    depends_on:
+      - prometheus
+    network_mode: host
