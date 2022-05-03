@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -14,18 +15,33 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/time/rate"
 )
 
+// Debug allows to enable debug mode.
 var Debug = false
 
+var (
+	// metricsNamespace specifies the namespace for the prometheus metrics.
+	metricsNamespace = "app"
+
+	// metricsSubsystem specifies the subsystem for the prometheus metrics.
+	metricsSubsystem = "api"
+
+	// bufferSize specifies limiter channel buffer size.
+	bufferSize = 128
+)
+
 type Server struct {
-	limiter      *rate.Limiter
-	http         *http.Server
-	messenger    *infobip.Messenger
-	incomingAddr string
-	targetAddr   string
-	metrics      *metrics
+	http      *http.Server
+	messenger *infobip.Messenger
+
+	incomingAddr     string
+	targetAddr       string
+	receiveThreshold int
+
+	sentCh     chan struct{}
+	receivedCh chan struct{}
+	metrics    *metrics
 }
 
 type metrics struct {
@@ -37,54 +53,45 @@ type metrics struct {
 func New(
 	incomingAddr, targetAddr, serverAddr string,
 	messenger *infobip.Messenger,
+	receiveThreshold int,
 ) *Server {
 
 	s := &Server{
-		// 1000 messages per second.
-		limiter: rate.NewLimiter(rate.Every(time.Second/1000), 1),
 		http: &http.Server{
 			Addr: serverAddr,
 		},
-		messenger:    messenger,
-		incomingAddr: incomingAddr,
-		targetAddr:   targetAddr,
+		messenger:        messenger,
+		incomingAddr:     incomingAddr,
+		targetAddr:       targetAddr,
+		receiveThreshold: receiveThreshold,
+		sentCh:           make(chan struct{}, bufferSize),
+		receivedCh:       make(chan struct{}, bufferSize),
 		metrics: &metrics{
 			totalActiveConnections: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace: "app",
-				Subsystem: "api",
+				Namespace: metricsNamespace,
+				Subsystem: metricsSubsystem,
 				Name:      "total_active_connections",
 			}),
 			totalReceivedMessages: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: "app",
-				Subsystem: "api",
+				Namespace: metricsNamespace,
+				Subsystem: metricsSubsystem,
 				Name:      "total_received_messages",
 			}),
 			totalSentMessages: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: "app",
-				Subsystem: "api",
+				Namespace: metricsNamespace,
+				Subsystem: metricsSubsystem,
 				Name:      "total_sent_messages",
 			}),
 		},
 	}
 
 	s.http.Handler = s.router()
+
 	prometheus.MustRegister(s.metrics.totalActiveConnections)
 	prometheus.MustRegister(s.metrics.totalReceivedMessages)
 	prometheus.MustRegister(s.metrics.totalSentMessages)
 
 	return s
-}
-
-func (s *Server) Close() error {
-	return s.http.Close()
-}
-
-func (s *Server) router() chi.Router {
-	r := chi.NewRouter()
-
-	r.Handle("/metrics", promhttp.Handler())
-
-	return r
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -129,7 +136,74 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	wg.Wait()
 
+	close(s.sentCh)
+	close(s.receivedCh)
+
 	return nil
+}
+
+func (s *Server) Limiter(ctx context.Context) {
+	defer func() {
+		for range s.sentCh {
+		}
+		for range s.receivedCh {
+		}
+	}()
+
+	tm := time.NewTimer(time.Second)
+	defer tm.Stop()
+
+	var (
+		totalSent     int
+		totalReceived int
+		warnings      = 0
+	)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tm.C:
+			if Debug {
+				logrus.WithFields(logrus.Fields{
+					"totalSent":     totalSent,
+					"totalReceived": totalReceived,
+				}).Info("messages per second")
+			}
+
+			if totalReceived > s.receiveThreshold {
+				warnings++
+			} else {
+				warnings = 0
+			}
+
+			if warnings == 3 {
+				message := fmt.Sprintf("Proxy alert, the service is under a heavy workload. Currently receiving %d p/s and sending %d p/s.", totalReceived, totalSent)
+
+				if err := s.messenger.Send(ctx, message); err != nil {
+					logrus.WithError(err).Error("sending a sms message")
+				} else {
+					warnings = 0
+				}
+			}
+
+			totalSent = 0
+			totalReceived = 0
+			tm.Reset(time.Second)
+		case <-s.sentCh:
+			totalSent++
+		case <-s.receivedCh:
+			totalReceived++
+		}
+	}
+}
+
+func (s *Server) router() chi.Router {
+	r := chi.NewRouter()
+
+	r.Handle("/metrics", promhttp.Handler())
+
+	return r
 }
 
 func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
@@ -163,7 +237,7 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 	for ctx.Err() == nil {
 		n, err := src.Read(buff)
 		if err != nil {
-			if !errors.Is(err, io.EOF) || !errors.Is(err, net.ErrClosed) {
+			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 				logrus.WithError(err).Error("reading incoming data")
 			}
 
@@ -172,9 +246,9 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 
 		b := buff[:n]
 
-		if Debug {
-			logrus.WithField("data", string(b)).Info("received a message")
-		}
+		//if Debug {
+		//	logrus.WithField("data", string(b)).Info("received a message")
+		//}
 
 		_, err = dst.Write(b)
 		if err != nil {
@@ -187,18 +261,26 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 
 		if receiver {
 			s.metrics.totalReceivedMessages.Inc()
+
+			select {
+			case s.receivedCh <- struct{}{}:
+				// OK
+			default:
+				logrus.Error("slow receiver channel")
+			}
 		} else {
 			s.metrics.totalSentMessages.Inc()
 
-			if !s.limiter.Allow() {
-				if Debug {
-					logrus.Info("sending a message")
-				}
-
-				if err := s.messenger.Send(ctx); err != nil {
-					logrus.WithError(err).Error("sending sms message")
-				}
+			select {
+			case s.sentCh <- struct{}{}:
+				// OK
+			default:
+				logrus.Error("slow sender channel")
 			}
 		}
 	}
+}
+
+func (s *Server) Close() error {
+	return s.http.Close()
 }

@@ -24,7 +24,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	randomizer := rand.New(rand.NewSource(time.Now().Unix()))
 
 	durationFn := func() time.Duration {
-		return time.Duration(randomizer.Intn(1000)) * time.Millisecond
+		return time.Duration(randomizer.Intn(500)) * time.Millisecond
 	}
 
 	tm := time.NewTimer(durationFn())

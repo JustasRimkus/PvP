@@ -20,10 +20,11 @@ var conf struct {
 	Target  string `envconfig:"default=:13306"`
 	Server  string `envconfig:"default=:13307"`
 	Infobip struct {
-		API       string
-		Host      string `envconfig:"default=r541zm.api.infobip.com`
-		Recipient string
-		Cooldown  time.Duration `envconfig:"default=1m"`
+		API              string
+		Host             string `envconfig:"default=r541zm.api.infobip.com`
+		Recipient        string
+		Cooldown         time.Duration `envconfig:"default=1m"`
+		ReceiveThreshold int           `envconfig:"default=45"`
 	}
 }
 
@@ -45,14 +46,21 @@ func main() {
 			conf.Infobip.API,
 			conf.Infobip.Host,
 			conf.Infobip.Recipient,
-			"IoT Proxy",
+			"Ioflow",
 			conf.Infobip.Cooldown,
 		),
+		conf.Infobip.ReceiveThreshold,
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		srv.Limiter(ctx)
+	}()
 
 	wg.Add(1)
 	go func() {

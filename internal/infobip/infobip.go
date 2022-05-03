@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Debug allows to enable debug mode.
 var Debug = false
 
 type Messenger struct {
@@ -47,7 +48,7 @@ func NewMessenger(
 	}
 }
 
-func (m *Messenger) Send(ctx context.Context) error {
+func (m *Messenger) Send(ctx context.Context, text string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -60,8 +61,6 @@ func (m *Messenger) Send(ctx context.Context) error {
 	}
 
 	request := infobip.NewSmsAdvancedTextualRequest()
-
-	text := "The proxy is under a heavy load."
 	request.SetMessages([]ib.SmsTextualMessage{
 		{
 			From: &m.messengerID,
