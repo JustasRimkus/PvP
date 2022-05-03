@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/JustasRimkus/PvP/internal/infobip"
 	"github.com/JustasRimkus/PvP/internal/server"
@@ -19,9 +20,10 @@ var conf struct {
 	Target  string `envconfig:"default=:13306"`
 	Server  string `envconfig:"default=:13307"`
 	Infobip struct {
-		Key       string `envconfig:"optional"`
-		Host      string `envconfig:"optional"`
-		Recipient string `envconfig:"optional"`
+		API       string
+		Host      string `envconfig:"default=r541zm.api.infobip.com`
+		Recipient string
+		Cooldown  time.Duration `envconfig:"default=1m"`
 	}
 }
 
@@ -40,10 +42,11 @@ func main() {
 		conf.Target,
 		conf.Server,
 		infobip.NewMessenger(
-			conf.Infobip.Key,
+			conf.Infobip.API,
 			conf.Infobip.Host,
 			conf.Infobip.Recipient,
 			"IoT Proxy",
+			conf.Infobip.Cooldown,
 		),
 	)
 

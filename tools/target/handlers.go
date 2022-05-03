@@ -23,14 +23,18 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 	randomizer := rand.New(rand.NewSource(time.Now().Unix()))
 
-	tm := time.NewTimer(time.Duration(randomizer.Float64()) * time.Minute)
+	durationFn := func() time.Duration {
+		return time.Duration(randomizer.Intn(1000)) * time.Millisecond
+	}
+
+	tm := time.NewTimer(durationFn())
 	defer tm.Stop()
 
 	for {
 		select {
 		case tstamp := <-tm.C:
 			fmt.Fprintf(w, "%s\n", tstamp)
-			tm.Reset(time.Duration(randomizer.Float64()) * time.Minute)
+			tm.Reset(durationFn())
 			flusher.Flush()
 		case <-ctx.Done():
 			fmt.Fprint(w, "disconnected\n")

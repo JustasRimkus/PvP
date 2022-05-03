@@ -7,17 +7,20 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/JustasRimkus/PvP/internal/infobip"
 	"github.com/go-chi/chi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/time/rate"
 )
 
 var Debug = false
 
 type Server struct {
+	limiter      *rate.Limiter
 	http         *http.Server
 	messenger    *infobip.Messenger
 	incomingAddr string
@@ -37,6 +40,8 @@ func New(
 ) *Server {
 
 	s := &Server{
+		// 1000 messages per second.
+		limiter: rate.NewLimiter(rate.Every(time.Second/1000), 1),
 		http: &http.Server{
 			Addr: serverAddr,
 		},
@@ -184,6 +189,16 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 			s.metrics.totalReceivedMessages.Inc()
 		} else {
 			s.metrics.totalSentMessages.Inc()
+
+			if !s.limiter.Allow() {
+				if Debug {
+					logrus.Info("sending a message")
+				}
+
+				if err := s.messenger.Send(ctx); err != nil {
+					logrus.WithError(err).Error("sending sms message")
+				}
+			}
 		}
 	}
 }
