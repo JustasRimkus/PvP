@@ -8,41 +8,64 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/JustasRimkus/PvP/internal/infobip"
 	"github.com/go-chi/chi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
 
+var Debug = false
+
 type Server struct {
 	http         *http.Server
+	messenger    *infobip.Messenger
 	incomingAddr string
 	targetAddr   string
-	metrics      metrics
+	metrics      *metrics
 }
 
 type metrics struct {
-	totalProcessed prometheus.Counter
+	totalActiveConnections prometheus.Gauge
+	totalReceivedMessages  prometheus.Counter
+	totalSentMessages      prometheus.Counter
 }
 
-func New(incomingAddr, targetAddr, serverAddr string) *Server {
+func New(
+	incomingAddr, targetAddr, serverAddr string,
+	messenger *infobip.Messenger,
+) *Server {
+
 	s := &Server{
 		http: &http.Server{
 			Addr: serverAddr,
 		},
+		messenger:    messenger,
 		incomingAddr: incomingAddr,
 		targetAddr:   targetAddr,
-		metrics: metrics{
-			totalProcessed: prometheus.NewCounter(prometheus.CounterOpts{
+		metrics: &metrics{
+			totalActiveConnections: prometheus.NewGauge(prometheus.GaugeOpts{
 				Namespace: "app",
 				Subsystem: "api",
-				Name:      "total_processed_requests",
+				Name:      "total_active_connections",
+			}),
+			totalReceivedMessages: prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: "app",
+				Subsystem: "api",
+				Name:      "total_received_messages",
+			}),
+			totalSentMessages: prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: "app",
+				Subsystem: "api",
+				Name:      "total_sent_messages",
 			}),
 		},
 	}
 
 	s.http.Handler = s.router()
-	prometheus.MustRegister(s.metrics.totalProcessed)
+	prometheus.MustRegister(s.metrics.totalActiveConnections)
+	prometheus.MustRegister(s.metrics.totalReceivedMessages)
+	prometheus.MustRegister(s.metrics.totalSentMessages)
 
 	return s
 }
@@ -80,14 +103,6 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		}
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for ctx.Err() == nil {
-			s.metrics.totalProcessed.Inc()
-		}
-	}()
-
 	for ctx.Err() == nil {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -101,10 +116,10 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			s.metrics.totalActiveConnections.Inc()
 			s.handleConn(ctx, conn)
+			s.metrics.totalActiveConnections.Dec()
 		}()
-
-		s.metrics.totalProcessed.Inc()
 	}
 
 	wg.Wait()
@@ -118,48 +133,57 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 		return
 	}
 
-	cctx, cancel := context.WithCancel(ctx)
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
 	go func() {
 		defer wg.Done()
-		connect(cctx, conn, rconn)
-		cancel()
+		s.connect(ctx, conn, rconn, true)
+		rconn.Close()
+		conn.Close()
 	}()
 
 	go func() {
 		defer wg.Done()
-		connect(cctx, rconn, conn)
-		cancel()
+		s.connect(ctx, rconn, conn, false)
+		rconn.Close()
+		conn.Close()
 	}()
 
 	wg.Wait()
-
-	rconn.Close()
-	conn.Close()
 }
 
-func connect(ctx context.Context, src, dst net.Conn) {
+func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) {
 	buff := make([]byte, 65535)
 	for ctx.Err() == nil {
 		n, err := src.Read(buff)
 		if err != nil {
-			if !errors.Is(err, io.EOF) {
+			if !errors.Is(err, io.EOF) || !errors.Is(err, net.ErrClosed) {
 				logrus.WithError(err).Error("reading incoming data")
 			}
 
 			return
 		}
+
 		b := buff[:n]
 
-		logrus.WithField("data", string(b)).Info("received a message")
+		if Debug {
+			logrus.WithField("data", string(b)).Info("received a message")
+		}
 
 		_, err = dst.Write(b)
 		if err != nil {
-			logrus.WithError(err).Error("writing incoming data")
+			if !errors.Is(err, net.ErrClosed) {
+				logrus.WithError(err).Error("writing incoming data")
+			}
+
 			return
+		}
+
+		if receiver {
+			s.metrics.totalReceivedMessages.Inc()
+		} else {
+			s.metrics.totalSentMessages.Inc()
 		}
 	}
 }

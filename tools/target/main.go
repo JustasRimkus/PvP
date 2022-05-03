@@ -65,9 +65,8 @@ func (s *Server) Close() error {
 func (s *Server) router() chi.Router {
 	r := chi.NewRouter()
 
-	r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("v1.0.0"))
-	})
+	r.Get("/events", s.events)
+	r.Get("/version", s.version)
 
 	return r
 }

@@ -7,13 +7,45 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/JustasRimkus/PvP/server"
+	"github.com/JustasRimkus/PvP/internal/infobip"
+	"github.com/JustasRimkus/PvP/internal/server"
 	"github.com/sirupsen/logrus"
+	"github.com/vrischmann/envconfig"
 )
 
+var conf struct {
+	Debug   bool   `envconfig:"default=true"`
+	Listen  string `envconfig:"default=:13305"`
+	Target  string `envconfig:"default=:13306"`
+	Server  string `envconfig:"default=:13307"`
+	Infobip struct {
+		Key       string `envconfig:"optional"`
+		Host      string `envconfig:"optional"`
+		Recipient string `envconfig:"optional"`
+	}
+}
+
 func main() {
-	// listen on port 13305 and write to port 13306
-	server := server.New(":13305", ":13306", ":13307")
+	if err := envconfig.Init(&conf); err != nil {
+		logrus.WithError(err).Fatal("initializing environment variables")
+	}
+
+	if conf.Debug {
+		server.Debug = true
+		infobip.Debug = true
+	}
+
+	srv := server.New(
+		conf.Listen,
+		conf.Target,
+		conf.Server,
+		infobip.NewMessenger(
+			conf.Infobip.Key,
+			conf.Infobip.Host,
+			conf.Infobip.Recipient,
+			"IoT Proxy",
+		),
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -22,8 +54,8 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := server.ListenAndServe(ctx); err != nil {
-			logrus.WithError(err).Fatal("launching proxy server")
+		if err := srv.ListenAndServe(ctx); err != nil {
+			logrus.WithError(err).Fatal("running proxy server")
 		}
 	}()
 
@@ -36,7 +68,7 @@ func main() {
 	logrus.Info("closing application")
 
 	cancel()
-	if err := server.Close(); err != nil {
+	if err := srv.Close(); err != nil {
 		logrus.WithError(err).Error("closing proxy server")
 	}
 

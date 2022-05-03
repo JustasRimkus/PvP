@@ -1,14 +1,9 @@
-volumes:
-  prometheus_data: {}
-  grafana_data: {}
-
 services:
   prometheus:
     image: prom/prometheus:latest
     restart: always
     volumes:
       - ./config/prometheus:/etc/prometheus/
-      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     network_mode: host
@@ -17,7 +12,6 @@ services:
     restart: always
     volumes:
       - ./config/grafana/provisioning/:/etc/grafana/provisioning/
-      - grafana_data:/var/lib/grafana
     env_file:
       - ./config/grafana/config.monitoring
     depends_on:
