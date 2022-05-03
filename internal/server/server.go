@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,9 +46,10 @@ type Server struct {
 }
 
 type metrics struct {
-	totalActiveConnections prometheus.Gauge
-	totalReceivedMessages  prometheus.Counter
-	totalSentMessages      prometheus.Counter
+	activeConnections prometheus.Gauge
+	malwarePackets    prometheus.Counter
+	receivedPackets   prometheus.Counter
+	sentPackets       prometheus.Counter
 }
 
 func New(
@@ -67,29 +69,35 @@ func New(
 		sentCh:           make(chan struct{}, bufferSize),
 		receivedCh:       make(chan struct{}, bufferSize),
 		metrics: &metrics{
-			totalActiveConnections: prometheus.NewGauge(prometheus.GaugeOpts{
+			activeConnections: prometheus.NewGauge(prometheus.GaugeOpts{
 				Namespace: metricsNamespace,
 				Subsystem: metricsSubsystem,
-				Name:      "total_active_connections",
+				Name:      "active_connections",
 			}),
-			totalReceivedMessages: prometheus.NewCounter(prometheus.CounterOpts{
+			malwarePackets: prometheus.NewCounter(prometheus.CounterOpts{
 				Namespace: metricsNamespace,
 				Subsystem: metricsSubsystem,
-				Name:      "total_received_messages",
+				Name:      "malware_packets",
 			}),
-			totalSentMessages: prometheus.NewCounter(prometheus.CounterOpts{
+			receivedPackets: prometheus.NewCounter(prometheus.CounterOpts{
 				Namespace: metricsNamespace,
 				Subsystem: metricsSubsystem,
-				Name:      "total_sent_messages",
+				Name:      "received_packets",
+			}),
+			sentPackets: prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: metricsNamespace,
+				Subsystem: metricsSubsystem,
+				Name:      "sent_packets",
 			}),
 		},
 	}
 
 	s.http.Handler = s.router()
 
-	prometheus.MustRegister(s.metrics.totalActiveConnections)
-	prometheus.MustRegister(s.metrics.totalReceivedMessages)
-	prometheus.MustRegister(s.metrics.totalSentMessages)
+	prometheus.MustRegister(s.metrics.activeConnections)
+	prometheus.MustRegister(s.metrics.malwarePackets)
+	prometheus.MustRegister(s.metrics.receivedPackets)
+	prometheus.MustRegister(s.metrics.sentPackets)
 
 	return s
 }
@@ -128,9 +136,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.metrics.totalActiveConnections.Inc()
+			s.metrics.activeConnections.Inc()
 			s.handleConn(ctx, conn)
-			s.metrics.totalActiveConnections.Dec()
+			s.metrics.activeConnections.Dec()
 		}()
 	}
 
@@ -246,9 +254,13 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 
 		b := buff[:n]
 
-		//if Debug {
-		//	logrus.WithField("data", string(b)).Info("received a message")
-		//}
+		if strings.Contains(string(b), "malware") {
+			if Debug {
+				logrus.WithField("packet", string(b)).Info("received a bad packet")
+			}
+
+			s.metrics.malwarePackets.Inc()
+		}
 
 		_, err = dst.Write(b)
 		if err != nil {
@@ -260,7 +272,7 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 		}
 
 		if receiver {
-			s.metrics.totalReceivedMessages.Inc()
+			s.metrics.receivedPackets.Inc()
 
 			select {
 			case s.receivedCh <- struct{}{}:
@@ -269,7 +281,7 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 				logrus.Error("slow receiver channel")
 			}
 		} else {
-			s.metrics.totalSentMessages.Inc()
+			s.metrics.sentPackets.Inc()
 
 			select {
 			case s.sentCh <- struct{}{}:

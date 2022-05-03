@@ -31,19 +31,19 @@
 		{
 			"datasource": {
 				"type": "prometheus",
-				"uid": "Bf_BnSl7z"
+				"uid": "fVgGeI_nk"
 			},
 			"fieldConfig": {
 				"defaults": {
 					"color": {
-						"mode": "palette-classic"
+						"mode": "continuous-BlPu"
 					},
 					"custom": {
 						"axisLabel": "",
 						"axisPlacement": "auto",
 						"barAlignment": 0,
 						"drawStyle": "line",
-						"fillOpacity": 0,
+						"fillOpacity": 10,
 						"gradientMode": "none",
 						"hideFrom": {
 							"legend": false,
@@ -104,39 +104,40 @@
 					"sort": "none"
 				}
 			},
+			"pluginVersion": "8.5.0",
 			"targets": [
 				{
 					"datasource": {
 						"type": "prometheus",
-						"uid": "Bf_BnSl7z"
+						"uid": "fVgGeI_nk"
 					},
 					"editorMode": "code",
-					"expr": "app_api_total_active_connections{}",
+					"expr": "app_api_active_connections{}",
 					"interval": "",
 					"legendFormat": "Active connections",
 					"range": true,
 					"refId": "A"
 				}
 			],
-			"title": "Total active connections",
+			"title": "Active connections",
 			"type": "timeseries"
 		},
 		{
 			"datasource": {
 				"type": "prometheus",
-				"uid": "Bf_BnSl7z"
+				"uid": "fVgGeI_nk"
 			},
 			"fieldConfig": {
 				"defaults": {
 					"color": {
-						"mode": "palette-classic"
+						"mode": "continuous-BlPu"
 					},
 					"custom": {
 						"axisLabel": "",
 						"axisPlacement": "auto",
 						"barAlignment": 0,
 						"drawStyle": "line",
-						"fillOpacity": 0,
+						"fillOpacity": 10,
 						"gradientMode": "none",
 						"hideFrom": {
 							"legend": false,
@@ -201,10 +202,10 @@
 				{
 					"datasource": {
 						"type": "prometheus",
-						"uid": "Bf_BnSl7z"
+						"uid": "fVgGeI_nk"
 					},
 					"editorMode": "code",
-					"expr": "app_api_total_received_messages{}",
+					"expr": "app_api_received_packets{}",
 					"interval": "",
 					"legendFormat": "Total received packets",
 					"range": true,
@@ -213,10 +214,10 @@
 				{
 					"datasource": {
 						"type": "prometheus",
-						"uid": "Bf_BnSl7z"
+						"uid": "fVgGeI_nk"
 					},
 					"editorMode": "code",
-					"expr": "app_api_total_sent_messages{}",
+					"expr": "app_api_sent_packets{}",
 					"hide": false,
 					"interval": "",
 					"legendFormat": "Total sent packets",
@@ -224,25 +225,121 @@
 					"refId": "B"
 				}
 			],
-			"title": "Total packets since restart",
+			"title": "Packets since restart",
 			"type": "timeseries"
 		},
 		{
 			"datasource": {
 				"type": "prometheus",
-				"uid": "Bf_BnSl7z"
+				"uid": "fVgGeI_nk"
 			},
 			"fieldConfig": {
 				"defaults": {
 					"color": {
-						"mode": "palette-classic"
+						"mode": "continuous-BlPu"
 					},
 					"custom": {
 						"axisLabel": "",
 						"axisPlacement": "auto",
 						"barAlignment": 0,
 						"drawStyle": "line",
-						"fillOpacity": 0,
+						"fillOpacity": 10,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "pps"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 9
+			},
+			"id": 5,
+			"options": {
+				"legend": {
+					"calcs": [
+						"lastNotNull",
+						"max"
+					],
+					"displayMode": "list",
+					"placement": "bottom"
+				},
+				"tooltip": {
+					"mode": "multi",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "fVgGeI_nk"
+					},
+					"editorMode": "code",
+					"exemplar": false,
+					"expr": "rate(app_api_malware_packets{}[$__rate_interval])",
+					"instant": false,
+					"interval": "",
+					"legendFormat": "Received malware packets per second",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Malware packets per second",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "fVgGeI_nk"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "continuous-BlPu"
+					},
+					"custom": {
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 10,
 						"gradientMode": "none",
 						"hideFrom": {
 							"legend": false,
@@ -308,10 +405,10 @@
 				{
 					"datasource": {
 						"type": "prometheus",
-						"uid": "Bf_BnSl7z"
+						"uid": "fVgGeI_nk"
 					},
 					"editorMode": "code",
-					"expr": "rate(app_api_total_received_messages{}[$__interval])",
+					"expr": "rate(app_api_received_packets{}[$__interval])",
 					"interval": "",
 					"legendFormat": "Total received packets per second",
 					"range": true,
@@ -320,10 +417,10 @@
 				{
 					"datasource": {
 						"type": "prometheus",
-						"uid": "Bf_BnSl7z"
+						"uid": "fVgGeI_nk"
 					},
 					"editorMode": "code",
-					"expr": "rate(app_api_total_sent_messages{}[$__interval])",
+					"expr": "rate(app_api_sent_packets{}[$__interval])",
 					"hide": false,
 					"interval": "",
 					"legendFormat": "Total sent packets per second",
@@ -331,7 +428,97 @@
 					"refId": "B"
 				}
 			],
-			"title": "Total packets per second",
+			"title": "Sent/received packets per second",
+			"type": "timeseries"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "fVgGeI_nk"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "continuous-BlPu"
+					},
+					"custom": {
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 10,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "never",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "bytes"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 8,
+				"w": 12,
+				"x": 12,
+				"y": 18
+			},
+			"id": 7,
+			"options": {
+				"legend": {
+					"calcs": [],
+					"displayMode": "list",
+					"placement": "bottom"
+				},
+				"tooltip": {
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "fVgGeI_nk"
+					},
+					"editorMode": "code",
+					"expr": "go_memstats_heap_inuse_bytes{}",
+					"legendFormat": "Memory in use",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Memory usage",
 			"type": "timeseries"
 		}
 	],
@@ -350,6 +537,6 @@
 	"timezone": "",
 	"title": "Metrics dashboard",
 	"uid": "YVkijI_7z",
-	"version": 1,
+	"version": 3,
 	"weekStart": ""
 }

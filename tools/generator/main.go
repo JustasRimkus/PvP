@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -111,11 +112,16 @@ func (g *Generator) startRequester(ctx context.Context, delay int, fn func(conte
 }
 
 func (g *Generator) basicRequest(ctx context.Context) {
+	body := []byte("nothing")
+	if g.randomizer.Intn(10) == 1 {
+		body = []byte("malware")
+	}
+
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"GET",
 		fmt.Sprintf("%s/version", g.targetAddr),
-		http.NoBody,
+		bytes.NewBuffer(body),
 	)
 	if err != nil {
 		if !errors.Is(err, ctx.Err()) {
