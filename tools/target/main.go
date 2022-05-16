@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,8 +14,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// go run ./... -port=13306
 func main() {
-	server := New(":13306")
+	var port string
+	flag.StringVar(&port, "port", "13306", "port to listen")
+	flag.Parse()
+
+	server := New(fmt.Sprintf(":%s", port))
 
 	var wg sync.WaitGroup
 

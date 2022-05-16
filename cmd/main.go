@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/JustasRimkus/PvP/internal/balancer"
 	"github.com/JustasRimkus/PvP/internal/infobip"
 	"github.com/JustasRimkus/PvP/internal/server"
 	"github.com/sirupsen/logrus"
@@ -15,11 +16,12 @@ import (
 )
 
 var conf struct {
-	Debug   bool   `envconfig:"default=true"`
-	Listen  string `envconfig:"default=:13305"`
-	Target  string `envconfig:"default=:13306"`
-	Server  string `envconfig:"default=:13307"`
-	Infobip struct {
+	Debug        bool          `envconfig:"default=true"`
+	Listen       string        `envconfig:"default=:13305"`
+	Targets      []string      `envconfig:"default=:13306"`
+	Server       string        `envconfig:"default=:13307"`
+	BalancerType balancer.Type `envconfig:"default=round-robin"`
+	Infobip      struct {
 		API              string
 		Host             string `envconfig:"default=r541zm.api.infobip.com`
 		Recipient        string
@@ -38,10 +40,15 @@ func main() {
 		infobip.Debug = true
 	}
 
+	bal, err := balancer.New(conf.BalancerType, conf.Targets)
+	if err != nil {
+		logrus.WithError(err).Fatal("initializing load balancer")
+	}
+
 	srv := server.New(
 		conf.Listen,
-		conf.Target,
 		conf.Server,
+		bal,
 		infobip.NewMessenger(
 			conf.Infobip.API,
 			conf.Infobip.Host,

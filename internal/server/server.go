@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JustasRimkus/PvP/internal/balancer"
+	"github.com/JustasRimkus/PvP/internal/core"
 	"github.com/JustasRimkus/PvP/internal/infobip"
 	"github.com/go-chi/chi"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,12 +24,6 @@ import (
 var Debug = false
 
 var (
-	// metricsNamespace specifies the namespace for the prometheus metrics.
-	metricsNamespace = "app"
-
-	// metricsSubsystem specifies the subsystem for the prometheus metrics.
-	metricsSubsystem = "api"
-
 	// bufferSize specifies limiter channel buffer size.
 	bufferSize = 128
 )
@@ -35,9 +31,9 @@ var (
 type Server struct {
 	http      *http.Server
 	messenger *infobip.Messenger
+	balancer  balancer.Balancer
 
 	incomingAddr     string
-	targetAddr       string
 	receiveThreshold int
 
 	sentCh     chan struct{}
@@ -46,14 +42,14 @@ type Server struct {
 }
 
 type metrics struct {
-	activeConnections prometheus.Gauge
-	malwarePackets    prometheus.Counter
-	receivedPackets   prometheus.Counter
-	sentPackets       prometheus.Counter
+	malwarePackets  prometheus.Counter
+	receivedPackets prometheus.Counter
+	sentPackets     prometheus.Counter
 }
 
 func New(
-	incomingAddr, targetAddr, serverAddr string,
+	incomingAddr, serverAddr string,
+	bal balancer.Balancer,
 	messenger *infobip.Messenger,
 	receiveThreshold int,
 ) *Server {
@@ -63,30 +59,25 @@ func New(
 			Addr: serverAddr,
 		},
 		messenger:        messenger,
+		balancer:         bal,
 		incomingAddr:     incomingAddr,
-		targetAddr:       targetAddr,
 		receiveThreshold: receiveThreshold,
 		sentCh:           make(chan struct{}, bufferSize),
 		receivedCh:       make(chan struct{}, bufferSize),
 		metrics: &metrics{
-			activeConnections: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace: metricsNamespace,
-				Subsystem: metricsSubsystem,
-				Name:      "active_connections",
-			}),
 			malwarePackets: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: metricsNamespace,
-				Subsystem: metricsSubsystem,
+				Namespace: core.MetricsNamespace,
+				Subsystem: core.MetricsSubsystem,
 				Name:      "malware_packets",
 			}),
 			receivedPackets: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: metricsNamespace,
-				Subsystem: metricsSubsystem,
+				Namespace: core.MetricsNamespace,
+				Subsystem: core.MetricsSubsystem,
 				Name:      "received_packets",
 			}),
 			sentPackets: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: metricsNamespace,
-				Subsystem: metricsSubsystem,
+				Namespace: core.MetricsNamespace,
+				Subsystem: core.MetricsSubsystem,
 				Name:      "sent_packets",
 			}),
 		},
@@ -94,7 +85,6 @@ func New(
 
 	s.http.Handler = s.router()
 
-	prometheus.MustRegister(s.metrics.activeConnections)
 	prometheus.MustRegister(s.metrics.malwarePackets)
 	prometheus.MustRegister(s.metrics.receivedPackets)
 	prometheus.MustRegister(s.metrics.sentPackets)
@@ -136,9 +126,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.metrics.activeConnections.Inc()
 			s.handleConn(ctx, conn)
-			s.metrics.activeConnections.Dec()
 		}()
 	}
 
@@ -172,6 +160,10 @@ func (s *Server) Limiter(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tm.C:
+			if totalSent == 0 && totalReceived == 0 {
+				continue
+			}
+
 			if Debug {
 				logrus.WithFields(logrus.Fields{
 					"totalSent":     totalSent,
@@ -215,7 +207,10 @@ func (s *Server) router() chi.Router {
 }
 
 func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
-	rconn, err := net.Dial("tcp", s.targetAddr)
+	targetAddr, cleanup := s.balancer.Pick()
+	defer cleanup()
+
+	rconn, err := net.Dial("tcp", targetAddr)
 	if err != nil {
 		return
 	}
@@ -255,10 +250,6 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 		b := buff[:n]
 
 		if strings.Contains(string(b), "malware") {
-			if Debug {
-				logrus.WithField("packet", string(b)).Info("received a bad packet")
-			}
-
 			s.metrics.malwarePackets.Inc()
 		}
 
