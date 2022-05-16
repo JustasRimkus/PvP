@@ -13,6 +13,7 @@ type Type string
 const (
 	TypeRoundRobin Type = "round-robin"
 	TypeLeastConn  Type = "least-conn"
+	TypeRandom     Type = "random"
 )
 
 type Balancer interface {
@@ -61,6 +62,11 @@ func New(typ Type, targetAddrs []string) (Balancer, error) {
 		}, nil
 	case TypeLeastConn:
 		return &leastConn{
+			targets: targets,
+			metrics: metrics,
+		}, nil
+	case TypeRandom:
+		return &random{
 			targets: targets,
 			metrics: metrics,
 		}, nil
