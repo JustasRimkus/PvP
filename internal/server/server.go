@@ -14,6 +14,7 @@ import (
 	"github.com/JustasRimkus/PvP/internal/balancer"
 	"github.com/JustasRimkus/PvP/internal/core"
 	"github.com/JustasRimkus/PvP/internal/infobip"
+	"github.com/cdipaolo/sentiment"
 	"github.com/go-chi/chi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -32,6 +33,7 @@ type Server struct {
 	http      *http.Server
 	messenger *infobip.Messenger
 	balancer  balancer.Balancer
+	model     sentiment.Models
 
 	incomingAddr     string
 	receiveThreshold int
@@ -52,7 +54,12 @@ func New(
 	bal balancer.Balancer,
 	messenger *infobip.Messenger,
 	receiveThreshold int,
-) *Server {
+) (*Server, error) {
+
+	model, err := sentiment.Restore()
+	if err != nil {
+		return nil, err
+	}
 
 	s := &Server{
 		http: &http.Server{
@@ -60,6 +67,7 @@ func New(
 		},
 		messenger:        messenger,
 		balancer:         bal,
+		model:            model,
 		incomingAddr:     incomingAddr,
 		receiveThreshold: receiveThreshold,
 		sentCh:           make(chan struct{}, bufferSize),
@@ -89,7 +97,7 @@ func New(
 	prometheus.MustRegister(s.metrics.receivedPackets)
 	prometheus.MustRegister(s.metrics.sentPackets)
 
-	return s
+	return s, nil
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -237,6 +245,8 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 
 func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) {
 	buff := make([]byte, 65535)
+
+	var initialized bool
 	for ctx.Err() == nil {
 		n, err := src.Read(buff)
 		if err != nil {
@@ -248,10 +258,6 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 		}
 
 		b := buff[:n]
-
-		if strings.Contains(string(b), "malware") {
-			s.metrics.malwarePackets.Inc()
-		}
 
 		_, err = dst.Write(b)
 		if err != nil {
@@ -271,15 +277,37 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 			default:
 				logrus.Error("slow receiver channel")
 			}
-		} else {
-			s.metrics.sentPackets.Inc()
 
-			select {
-			case s.sentCh <- struct{}{}:
-				// OK
-			default:
-				logrus.Error("slow sender channel")
+			// request body
+			if !initialized {
+				parts := strings.Split(string(b), "\r\n")
+				for i, part := range parts {
+					if part != "" {
+						continue
+					}
+
+					if len(parts) > i+1 {
+						logrus.Info(parts[i+1])
+						if s.model.SentimentAnalysis(parts[i+1], sentiment.English).Score == 0 {
+							s.metrics.malwarePackets.Inc()
+						}
+					}
+
+					break
+				}
 			}
+
+			initialized = true
+			continue
+		}
+
+		s.metrics.sentPackets.Inc()
+
+		select {
+		case s.sentCh <- struct{}{}:
+			// OK
+		default:
+			logrus.Error("slow sender channel")
 		}
 	}
 }

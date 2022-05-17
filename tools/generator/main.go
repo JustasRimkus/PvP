@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/tjarratt/babble"
 )
 
 func main() {
@@ -112,16 +113,17 @@ func (g *Generator) startRequester(ctx context.Context, delay int, fn func(conte
 }
 
 func (g *Generator) basicRequest(ctx context.Context) {
-	body := []byte("nothing")
-	if g.randomizer.Intn(10) == 1 {
-		body = []byte("malware")
-	}
+	babbler := babble.NewBabbler()
+	babbler.Count = g.randomizer.Intn(100)
+	babbler.Separator = " "
 
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"GET",
 		fmt.Sprintf("%s/version", g.targetAddr),
-		bytes.NewBuffer(body),
+		bytes.NewBuffer(
+			[]byte(babbler.Babble()),
+		),
 	)
 	if err != nil {
 		if !errors.Is(err, ctx.Err()) {

@@ -45,7 +45,7 @@ func main() {
 		logrus.WithError(err).Fatal("initializing load balancer")
 	}
 
-	srv := server.New(
+	srv, err := server.New(
 		conf.Listen,
 		conf.Server,
 		bal,
@@ -58,6 +58,9 @@ func main() {
 		),
 		conf.Infobip.ReceiveThreshold,
 	)
+	if err != nil {
+		logrus.WithError(err).Fatal("initializing server")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
