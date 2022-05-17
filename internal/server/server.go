@@ -278,7 +278,6 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 				logrus.Error("slow receiver channel")
 			}
 
-			// request body
 			if !initialized {
 				parts := strings.Split(string(b), "\r\n")
 				for i, part := range parts {
@@ -287,7 +286,6 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 					}
 
 					if len(parts) > i+1 {
-						logrus.Info(parts[i+1])
 						if s.model.SentimentAnalysis(parts[i+1], sentiment.English).Score == 0 {
 							s.metrics.malwarePackets.Inc()
 						}
