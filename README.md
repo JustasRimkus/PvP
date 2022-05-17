@@ -4,7 +4,7 @@ Iotflow is a proxy with various features that allow to monitor the data flow bet
 
 ## Features:
 
-- `TCP` proxying.
+- `TCP` proxying;
 - Environment variables configuration;
 - Load balancing - (`round-robin`, `least-conn` and `random`);
 - Machine learning sentiment check for requests;
@@ -18,7 +18,7 @@ Iotflow is a proxy with various features that allow to monitor the data flow bet
 
 - `Docker`;
 - Go 1.17 or later;
-- If using linux and generator tool, the `/usr/share/dict/words` file is needed, it can be installed via words package;
+- If using linux and generator tool, the `/usr/share/dict/words` file is needed, it can be installed via `words` package;
 
 ## Setup
 
