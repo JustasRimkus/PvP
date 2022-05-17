@@ -19,6 +19,7 @@ func (rr *roundRobin) Pick() (string, func()) {
 	target.connections++
 	rr.targets[id] = target
 	rr.metrics.activeConnections[target.addr].Inc()
+	rr.metrics.totalConnections[target.addr].Inc()
 
 	rr.next = rr.next + 1
 	if len(rr.targets) == rr.next {

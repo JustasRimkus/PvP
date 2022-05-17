@@ -44,9 +44,10 @@ type Server struct {
 }
 
 type metrics struct {
-	malwarePackets  prometheus.Counter
-	receivedPackets prometheus.Counter
-	sentPackets     prometheus.Counter
+	positivelyScoredPackets prometheus.Counter
+	negativelyScoredPackets prometheus.Counter
+	receivedPackets         prometheus.Counter
+	sentPackets             prometheus.Counter
 }
 
 func New(
@@ -73,10 +74,15 @@ func New(
 		sentCh:           make(chan struct{}, bufferSize),
 		receivedCh:       make(chan struct{}, bufferSize),
 		metrics: &metrics{
-			malwarePackets: prometheus.NewCounter(prometheus.CounterOpts{
+			positivelyScoredPackets: prometheus.NewCounter(prometheus.CounterOpts{
 				Namespace: core.MetricsNamespace,
 				Subsystem: core.MetricsSubsystem,
-				Name:      "malware_packets",
+				Name:      "positively_scored_packets",
+			}),
+			negativelyScoredPackets: prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: core.MetricsNamespace,
+				Subsystem: core.MetricsSubsystem,
+				Name:      "negatively_scored_packets",
 			}),
 			receivedPackets: prometheus.NewCounter(prometheus.CounterOpts{
 				Namespace: core.MetricsNamespace,
@@ -93,7 +99,7 @@ func New(
 
 	s.http.Handler = s.router()
 
-	prometheus.MustRegister(s.metrics.malwarePackets)
+	prometheus.MustRegister(s.metrics.negativelyScoredPackets)
 	prometheus.MustRegister(s.metrics.receivedPackets)
 	prometheus.MustRegister(s.metrics.sentPackets)
 
@@ -169,6 +175,7 @@ func (s *Server) Limiter(ctx context.Context) {
 			return
 		case <-tm.C:
 			if totalSent == 0 && totalReceived == 0 {
+				tm.Reset(time.Second)
 				continue
 			}
 
@@ -287,7 +294,9 @@ func (s *Server) connect(ctx context.Context, src, dst net.Conn, receiver bool) 
 
 					if len(parts) > i+1 {
 						if s.model.SentimentAnalysis(parts[i+1], sentiment.English).Score == 0 {
-							s.metrics.malwarePackets.Inc()
+							s.metrics.negativelyScoredPackets.Inc()
+						} else {
+							s.metrics.positivelyScoredPackets.Inc()
 						}
 					}
 

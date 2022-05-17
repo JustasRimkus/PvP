@@ -22,6 +22,7 @@ func (r *random) Pick() (string, func()) {
 	target.connections++
 	r.targets[id] = target
 	r.metrics.activeConnections[target.addr].Inc()
+	r.metrics.totalConnections[target.addr].Inc()
 
 	return target.addr, func() {
 		r.mu.Lock()

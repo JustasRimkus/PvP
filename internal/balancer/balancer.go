@@ -21,6 +21,7 @@ type Balancer interface {
 }
 
 type metrics struct {
+	totalConnections  map[string]prometheus.Counter
 	activeConnections map[string]prometheus.Gauge
 }
 
@@ -42,6 +43,12 @@ func New(typ Type, targetAddrs []string) (Balancer, error) {
 	)
 
 	for _, targetAddr := range targetAddrs {
+		metrics.totalConnections[targetAddr] = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: core.MetricsNamespace,
+			Subsystem: core.MetricsSubsystem,
+			Name:      fmt.Sprintf("total_connections_%s", targetAddr),
+		})
+
 		metrics.activeConnections[targetAddr] = prometheus.NewGauge(prometheus.GaugeOpts{
 			Namespace: core.MetricsNamespace,
 			Subsystem: core.MetricsSubsystem,

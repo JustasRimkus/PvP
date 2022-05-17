@@ -22,6 +22,7 @@ func (lc *leastConn) Pick() (string, func()) {
 	target := lc.targets[min]
 	target.connections++
 	lc.metrics.activeConnections[target.addr].Inc()
+	lc.metrics.totalConnections[target.addr].Inc()
 	lc.targets[min] = target
 
 	return target.addr, func() {

@@ -4,6 +4,7 @@ Iotflow is a proxy with various features that allow to monitor the data flow bet
 
 ## Features:
 
+- `TCP` proxying.
 - Environment variables configuration;
 - Load balancing - (`round-robin`, `least-conn` and `random`);
 - Machine learning sentiment check for requests;
