@@ -3,6 +3,8 @@ package balancer
 import (
 	"errors"
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/JustasRimkus/PvP/internal/core"
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,6 +40,7 @@ func New(typ Type, targetAddrs []string) (Balancer, error) {
 	var (
 		targets []instance
 		metrics = &metrics{
+			totalConnections:  make(map[string]prometheus.Counter),
 			activeConnections: make(map[string]prometheus.Gauge),
 		}
 	)
@@ -55,6 +58,7 @@ func New(typ Type, targetAddrs []string) (Balancer, error) {
 			Name:      fmt.Sprintf("active_connections_%s", targetAddr),
 		})
 
+		prometheus.MustRegister(metrics.totalConnections[targetAddr])
 		prometheus.MustRegister(metrics.activeConnections[targetAddr])
 		targets = append(targets, instance{
 			addr: targetAddr,
@@ -75,6 +79,7 @@ func New(typ Type, targetAddrs []string) (Balancer, error) {
 	case TypeRandom:
 		return &random{
 			targets: targets,
+			rand:    rand.New(rand.NewSource(time.Now().Unix())),
 			metrics: metrics,
 		}, nil
 	default:

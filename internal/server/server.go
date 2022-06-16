@@ -99,6 +99,7 @@ func New(
 
 	s.http.Handler = s.router()
 
+	prometheus.MustRegister(s.metrics.positivelyScoredPackets)
 	prometheus.MustRegister(s.metrics.negativelyScoredPackets)
 	prometheus.MustRegister(s.metrics.receivedPackets)
 	prometheus.MustRegister(s.metrics.sentPackets)
